@@ -1,12 +1,15 @@
 package com.example.voicecontrol;
 
 import java.util.Random;
+import java.util.concurrent.ExecutionException;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -19,7 +22,9 @@ import android.widget.RelativeLayout;
 import androidx.annotation.NonNull;
 
 import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
@@ -99,11 +104,12 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
             }
         }
 
+
         for(i=0;i<cube_state.length();i++){
             cube_state_arr[i/9] += cube_state.charAt(i);
         }
         char curr = 'U';
-        //cube_state_arr[3] = "SSSUSSSSS";
+
 // paint top
 
         for (i = 0; i < 9; i++) {
@@ -112,13 +118,16 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
             mCubes[i].setFaceColor(Cube.kTop, col);
         }
 // paint bottom
+
         for (i = 18; i < 27; i++) {
             k = i - 18;
-            curr = cube_state_arr[3].charAt(k);
+            int c = 3 * (2 - (k/3)) + (k%3);
+            curr = cube_state_arr[3].charAt(c);
             GLColor col = convert_to_color(curr);
             mCubes[i].setFaceColor(Cube.kBottom, col);
         }
 // paint left
+
         for (i = 0; i < 27; i += 3) {
             k = i / 3 ;
             curr = cube_state_arr[4].charAt(k);
@@ -128,7 +137,8 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
 // paint right
         for (i = 2; i < 27; i += 3) {
             k = (i - 2) / 3;
-            curr = cube_state_arr[1].charAt(k);
+            int c = 2 - (k%3) + (k/3) * 3;
+            curr = cube_state_arr[1].charAt(c);
             GLColor col = convert_to_color(curr);
             mCubes[i].setFaceColor(Cube.kRight, col);
         }
@@ -136,7 +146,8 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
         for (i = 0; i < 27; i += 9) {
             for (j = 0; j < 3; j++) {
                 k = i / 3 + j ;
-                curr = cube_state_arr[5].charAt(k);
+                int c = 2 - (k%3) + (k/3) * 3;
+                curr = cube_state_arr[5].charAt(c);
                 GLColor col = convert_to_color(curr);
                 mCubes[i + j].setFaceColor(Cube.kBack, col);
             }
@@ -247,17 +258,17 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
     }
 
     public void rotate_function(int rotate_index, int delay){
+        boolean direction = rotate_index == kUp || rotate_index == kLeft || rotate_index == kBack;
+
         if (mCurrentLayer == null) {
             //mRandom.nextInt(9);
             mCurrentLayer = mLayers[rotate_index];
             mCurrentLayerPermutation = mLayerPermutations[rotate_index];
             mCurrentLayer.startAnimation();
-            boolean direction = mRandom.nextBoolean();
-            int count = mRandom.nextInt(3) + 1;
 
-            count = 1;
-            direction = false;
+            int count = 1;
             mCurrentAngle = 0;
+            //direction = false;
             if (direction) {
                 mAngleIncrement = (float)Math.PI / 50;
                 mEndAngle = mCurrentAngle + ((float)Math.PI * count) / 2f;
@@ -285,12 +296,21 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
             mCurrentLayer = null;
 
 // adjust mPermutation based on the completed layer rotation
-            int[] newPermutation = new int[27];
-            for (int i = 0; i < 27; i++) {
-                newPermutation[i] = mPermutation[mCurrentLayerPermutation[i]];
+
+            int counter = 0;
+
+            if(!direction){
+                counter = 2;
             }
-            mPermutation = newPermutation;
-            updateLayers();
+            while(counter < 3) {
+                int[] newPermutation = new int[27];
+                for (int i = 0; i < 27; i++) {
+                    newPermutation[i] = mPermutation[mCurrentLayerPermutation[i]];
+                }
+                mPermutation = newPermutation;
+                updateLayers();
+                counter++;
+            }
 
         } else {
             mCurrentLayer.setAngle(mCurrentAngle);
@@ -313,23 +333,16 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
-        cube_state_ref.addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot snapshot) {
-                cube_state = snapshot.getValue(String.class);
-                world = makeGLWorld();
-            }
 
-            @Override
-            public void onCancelled(@NonNull DatabaseError error) {
+       // cube_state_ref.get().getResult();
 
-            }
-        });
 // We don't need a title either.
+        cube_state = getIntent().getStringExtra("cube_state");
+
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         mView = new GLSurfaceView(getApplication());
         //mView = (GLSurfaceView) findViewById(R.id.gl);
-        mRenderer = new KubeRenderer(world, this);
+        mRenderer = new KubeRenderer(makeGLWorld(), this);
         mView.setRenderer(mRenderer);
         setContentView(mView);
 
@@ -391,7 +404,7 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
             @Override
             public void onClick(View v) {
                 rotate_function(kRight, 18);
-                rotate.setValue("right");
+                //rotate.setValue("right");
             }
         });
 
@@ -399,21 +412,21 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
             @Override
             public void onClick(View v) {
                 rotate_function(kLeft, 18);
-                rotate.setValue("left");
+                //rotate.setValue("left");
             }
         });
         rotate_up.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 rotate_function(kUp, 18);
-                rotate.setValue("up");
+                //rotate.setValue("up");
             }
         });
         rotate_down.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 rotate_function(kDown, 18);
-                rotate.setValue("down");
+                //rotate.setValue("down");
 
             }
         });
@@ -421,14 +434,14 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
             @Override
             public void onClick(View v) {
                 rotate_function(kFront, 18);
-                rotate.setValue("front");
+                //rotate.setValue("front");
             }
         });
         rotate_backward.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 rotate_function(kBack, 18);
-                rotate.setValue("back");
+                //rotate.setValue("back");
             }
         });
         scramble.setOnClickListener(new View.OnClickListener() {
@@ -445,6 +458,10 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
         rotate.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if(counter == 0){
+                    counter++;
+                    return;
+                }
                 String direction = snapshot.getValue(String.class);
                 int dir_k = convert_to_k(direction);
                 rotate_function(dir_k,18);
@@ -581,7 +598,7 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
     static final int kSide = 8;
 
     //colors
-    String cube_state = "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB";
+    String cube_state = "";
     String[] cube_state_arr = {"","","","","",""};
 
     int one = 0x10000;
@@ -599,9 +616,10 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
 
     //fire base
 
+    int counter = 0;
     FirebaseDatabase database = FirebaseDatabase.getInstance();
-    DatabaseReference rotate = database.getReference("Rotation/Direction");
     DatabaseReference cube_state_ref = database.getReference("cube_state");
+    DatabaseReference rotate = database.getReference("Rotation/Direction");
 
 
 }
