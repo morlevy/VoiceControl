@@ -8,6 +8,7 @@ import android.graphics.drawable.Drawable;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 import android.widget.Button;
@@ -17,6 +18,8 @@ import android.widget.RelativeLayout;
 
 import androidx.annotation.NonNull;
 
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
@@ -24,20 +27,22 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 
 public class MainActivity extends Activity implements KubeRenderer.AnimationCallback {
+    public GLColor convert_to_color(char x){
+        switch (x){
+            case 'U' : return white;
+            case 'R' : return red;
+            case 'F' : return green;
+            case 'D' : return yellow;
+            case 'L' : return orange;
+            case 'B' : return blue;
+            default: return black;
+        }
 
+    }
     private GLWorld makeGLWorld()
     {
         GLWorld world = new GLWorld();
 
-        int one = 0x10000;
-        int half = 0x08000;
-        GLColor red = new GLColor(one, 0, 0);
-        GLColor green = new GLColor(0, one, 0);
-        GLColor blue = new GLColor(0, 0, one);
-        GLColor yellow = new GLColor(one, one, 0);
-        GLColor orange = new GLColor(one, half, 0);
-        GLColor white = new GLColor(one, one, one);
-        GLColor black = new GLColor(0, 0, 0);
 
         float c0 = -1.0f;
         float c1 = -0.38f;
@@ -84,7 +89,7 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
         mCubes[26] = new Cube(world, c4, c0, c4, c5, c1, c5);
 
 // paint the sides
-        int i, j;
+        int i, j,k;
 // set all faces black by default
         for (i = 0; i < 27; i++) {
             Cube cube = mCubes[i];
@@ -94,26 +99,57 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
             }
         }
 
+        for(i=0;i<cube_state.length();i++){
+            cube_state_arr[i/9] += cube_state.charAt(i);
+        }
+        char curr = 'U';
+        //cube_state_arr[3] = "SSSUSSSSS";
 // paint top
-        for (i = 0; i < 9; i++)
-            mCubes[i].setFaceColor(Cube.kTop, orange);
+
+        for (i = 0; i < 9; i++) {
+            curr = cube_state_arr[0].charAt(i);
+            GLColor col = convert_to_color(curr);
+            mCubes[i].setFaceColor(Cube.kTop, col);
+        }
 // paint bottom
-        for (i = 18; i < 27; i++)
-            mCubes[i].setFaceColor(Cube.kBottom, red);
+        for (i = 18; i < 27; i++) {
+            k = i - 18;
+            curr = cube_state_arr[3].charAt(k);
+            GLColor col = convert_to_color(curr);
+            mCubes[i].setFaceColor(Cube.kBottom, col);
+        }
 // paint left
-        for (i = 0; i < 27; i += 3)
-            mCubes[i].setFaceColor(Cube.kLeft, yellow);
+        for (i = 0; i < 27; i += 3) {
+            k = i / 3 ;
+            curr = cube_state_arr[4].charAt(k);
+            GLColor col = convert_to_color(curr);
+            mCubes[i].setFaceColor(Cube.kLeft, col);
+        }
 // paint right
-        for (i = 2; i < 27; i += 3)
-            mCubes[i].setFaceColor(Cube.kRight, white);
+        for (i = 2; i < 27; i += 3) {
+            k = (i - 2) / 3;
+            curr = cube_state_arr[1].charAt(k);
+            GLColor col = convert_to_color(curr);
+            mCubes[i].setFaceColor(Cube.kRight, col);
+        }
 // paint back
-        for (i = 0; i < 27; i += 9)
-            for (j = 0; j < 3; j++)
-                mCubes[i + j].setFaceColor(Cube.kBack, blue);
+        for (i = 0; i < 27; i += 9) {
+            for (j = 0; j < 3; j++) {
+                k = i / 3 + j ;
+                curr = cube_state_arr[5].charAt(k);
+                GLColor col = convert_to_color(curr);
+                mCubes[i + j].setFaceColor(Cube.kBack, col);
+            }
+        }
 // paint front
-        for (i = 6; i < 27; i += 9)
-            for (j = 0; j < 3; j++)
-                mCubes[i + j].setFaceColor(Cube.kFront, green);
+        for (i = 6; i < 27; i += 9) {
+            for (j = 0; j < 3; j++) {
+                k = ((i / 9) * 3) + j ;
+                curr = cube_state_arr[2].charAt(k);
+                GLColor col = convert_to_color(curr);
+                mCubes[i + j].setFaceColor(Cube.kFront, col);
+            }
+        }
 
         for (i = 0; i < 27; i++)
             if (mCubes[i] != null)
@@ -277,15 +313,27 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
+        cube_state_ref.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                cube_state = snapshot.getValue(String.class);
+                world = makeGLWorld();
+            }
 
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+
+            }
+        });
 // We don't need a title either.
         requestWindowFeature(Window.FEATURE_NO_TITLE);
-
         mView = new GLSurfaceView(getApplication());
         //mView = (GLSurfaceView) findViewById(R.id.gl);
-        mRenderer = new KubeRenderer(makeGLWorld(), this);
+        mRenderer = new KubeRenderer(world, this);
         mView.setRenderer(mRenderer);
         setContentView(mView);
+
+
 
 
         GridLayout rotate_ll = new GridLayout(this);
@@ -532,9 +580,28 @@ public class MainActivity extends Activity implements KubeRenderer.AnimationCall
     static final int kEquator = 7;
     static final int kSide = 8;
 
+    //colors
+    String cube_state = "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB";
+    String[] cube_state_arr = {"","","","","",""};
+
+    int one = 0x10000;
+    int half = 0x08000;
+
+    GLColor red = new GLColor(one, 0, 0);
+    GLColor green = new GLColor(0, one, 0);
+    GLColor blue = new GLColor(0, 0, one);
+    GLColor yellow = new GLColor(one, one, 0);
+    GLColor orange = new GLColor(one, half, 0);
+    GLColor white = new GLColor(one, one, one);
+    GLColor black = new GLColor(0, 0, 0);
+    GLWorld world;
+
+
     //fire base
 
     FirebaseDatabase database = FirebaseDatabase.getInstance();
-    DatabaseReference rotate = database.getReference("Rotation/direction");
+    DatabaseReference rotate = database.getReference("Rotation/Direction");
+    DatabaseReference cube_state_ref = database.getReference("cube_state");
+
 
 }

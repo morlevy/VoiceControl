@@ -48,6 +48,7 @@ public class GLFace {
             }
 
             vertex.color = c;
+            //vertex.color = new GLColor(250,50,10);
         }
 
         mColor = c;
